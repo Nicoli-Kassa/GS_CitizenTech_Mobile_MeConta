@@ -102,6 +102,8 @@ export type Pagina = {
   fotoUrl: string | null;
   criadaPorMembroId: number;
   chaveIdempotencia: string;
+  /** O que a pessoa idosa disse no áudio, escrito pela família (opcional). */
+  transcricao: string | null;
   criadaEm: string;
 };
 
@@ -141,6 +143,7 @@ export type ArquivoLocal = {
 
 export type NovaResposta = {
   titulo: string | null;
+  transcricao: string | null;
   duracaoSegundos: number;
   chaveIdempotencia: string;
   audio: ArquivoLocal;
@@ -151,4 +154,97 @@ export type IdosoRequest = {
   nome: string;
   apelido: string;
   whatsApp: string | null;
+};
+
+// ---------- Porta-retrato (IoT) ----------
+
+/** Aviso criado quando a pessoa idosa aperta "quero contar" no porta-retrato. */
+export type Aviso = {
+  id: number;
+  idosoId: number;
+  apelido: string;
+  envioId: number | null;
+  pergunta: string | null;
+  criadoEm: string;
+  visto: boolean;
+  vistoEm: string | null;
+};
+
+export type PortaRetrato = {
+  id: number;
+  idosoId: number;
+  codigo: string;
+  conectado: boolean;
+  ultimoContatoEm: string | null;
+};
+
+// ---------- Mapa do bairro e privacidade ----------
+
+export type NivelDeRisco = 'Baixo' | 'Medio' | 'Alto';
+export type ResultadoDaAnalise = 'Liberada' | 'PrecisaConfirmar' | 'Bloqueada' | 'Publicada';
+
+export type Achado = {
+  regraId: string;
+  tipo: string;
+  rotulo: string;
+  nivel: NivelDeRisco;
+  campo: string | null;
+  trechoMascarado: string;
+  explicacao: string;
+};
+
+export type AnalisePrivacidade = {
+  paginaId: number;
+  resultado: ResultadoDaAnalise;
+  indiceRiscoCidadao: number;
+  faixa: NivelDeRisco;
+  bloqueada: boolean;
+  exigeConfirmacao: boolean;
+  achados: Achado[];
+  versaoSegura: { titulo: string; transcricao: string | null };
+};
+
+export type AlertaDeRisco = {
+  rotulo: string;
+  nivel: NivelDeRisco;
+  trechos: string[];
+  alerta: string;
+  riscoReal: string;
+  oQueFazer: string;
+};
+
+/** Explicação em linguagem simples do que impede a publicação (texto da IA ou da equipe). */
+export type ExplicacaoDeRisco = {
+  paginaId: number;
+  resultado: ResultadoDaAnalise;
+  indiceRiscoCidadao: number;
+  faixa: NivelDeRisco;
+  resumo: string;
+  alertas: AlertaDeRisco[];
+  versaoSugerida: string | null;
+  /** Quem escreveu: "Gemini (...)", "Local" ou "Motor". */
+  fonte: string;
+};
+
+export type PublicarMemoriaRequest = {
+  bairro: string;
+  idosoAutorizou: boolean;
+  confirmoDadosPessoais: boolean;
+};
+
+export type MemoriaDoBairro = {
+  id: number;
+  bairro: string;
+  titulo: string;
+  apelido: string;
+  transcricao: string | null;
+  categoriaId: number;
+  /** Caminho relativo na API. Ex.: `/api/v1/memorias/3/audio`. */
+  audioUrl: string;
+  publicadaEm: string;
+};
+
+export type Publicacao = {
+  memoria: MemoriaDoBairro;
+  analise: AnalisePrivacidade;
 };

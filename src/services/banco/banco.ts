@@ -84,6 +84,11 @@ const MIGRACOES: readonly string[] = [
   CREATE INDEX IF NOT EXISTS ix_paginas_criada_em ON paginas (criada_em DESC);
   CREATE INDEX IF NOT EXISTS ix_envios_status ON envios (status);
   `,
+  // 2: transcrição do áudio e bairro onde a memória foi publicada
+  `
+  ALTER TABLE paginas ADD COLUMN transcricao TEXT;
+  ALTER TABLE paginas ADD COLUMN bairro_publicado TEXT;
+  `,
 ];
 
 let banco: Promise<SQLiteDatabase> | null = null;

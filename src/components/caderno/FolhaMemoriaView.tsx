@@ -8,6 +8,7 @@ import { formatarData } from '../../utils/regras';
 import { Cantoneira, Carimbo, Fita } from '../Enfeites';
 import { Icone } from '../Icone';
 import { Ilustracao } from '../Ilustracao';
+import { Botao } from '../Botao';
 import { PlayerDeAudio } from '../PlayerDeAudio';
 
 type FolhaMemoriaViewProps = {
@@ -17,10 +18,12 @@ type FolhaMemoriaViewProps = {
   largura: number;
   /** Só a folha visível carrega o áudio. */
   ativa: boolean;
+  /** Abre a página inteira: transcrição, levar ao bairro e apagar. */
+  onAbrir: () => void;
 };
 
 /** Uma memória do caderno: foto (ou desenho), título manuscrito, a pergunta e a voz. */
-export function FolhaMemoriaView({ folha, categoriaSlug, categoriaNome, largura, ativa }: FolhaMemoriaViewProps): React.JSX.Element {
+export function FolhaMemoriaView({ folha, categoriaSlug, categoriaNome, largura, ativa, onAbrir }: FolhaMemoriaViewProps): React.JSX.Element {
   const larguraFoto = Math.min(largura * 0.72, 300);
 
   return (
@@ -28,6 +31,7 @@ export function FolhaMemoriaView({ folha, categoriaSlug, categoriaNome, largura,
       <View style={styles.topo}>
         <Text style={styles.data}>{formatarData(folha.criadaEm)}</Text>
         <Carimbo texto={folha.idosoApelido} />
+        {folha.bairroPublicado ? <Carimbo texto={`no mapa de ${folha.bairroPublicado}`} cor={colors.sucesso} rotacao={4} /> : null}
       </View>
 
       <View style={[styles.foto, { width: larguraFoto }]}>
@@ -64,6 +68,22 @@ export function FolhaMemoriaView({ folha, categoriaSlug, categoriaNome, largura,
       ) : (
         <View style={styles.reservaPlayer} />
       )}
+
+      {folha.transcricao ? (
+        <View style={styles.pergunta}>
+          <Text style={styles.rotulo}>O que {folha.idosoApelido} contou</Text>
+          <Text style={styles.transcricao} numberOfLines={4}>
+            {folha.transcricao}
+          </Text>
+        </View>
+      ) : null}
+
+      <Botao
+        label="Abrir a página"
+        variante="contorno"
+        onPress={onAbrir}
+        accessibilityHint="Mostra o que foi contado, levar ao mapa do bairro e apagar"
+      />
 
       {folha.aguardandoEnvio ? (
         <View style={styles.aviso}>
@@ -134,6 +154,12 @@ const styles = StyleSheet.create({
   },
   textoPergunta: {
     fontFamily: fonts.livroItalico,
+    fontSize: fontSize.md,
+    lineHeight: fontSize.md * 1.45,
+    color: colors.tinta,
+  },
+  transcricao: {
+    fontFamily: fonts.livro,
     fontSize: fontSize.md,
     lineHeight: fontSize.md * 1.45,
     color: colors.tinta,

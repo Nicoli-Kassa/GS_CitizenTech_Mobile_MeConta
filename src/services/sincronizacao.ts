@@ -1,11 +1,19 @@
-import type { Pagina, Pergunta } from '../types/api';
+import type { ArquivoLocal, Pagina, Pergunta } from '../types/api';
+import { extensaoDe } from '../utils/arquivos';
+import { ApiError, ehFalhaDeConexao } from '../utils/errors';
 import { api } from './api';
 import { CATEGORIAS, PERGUNTAS_DO_CATALOGO } from './api/catalogo';
 import { abrirBanco } from './banco/banco';
 import {
+  confirmarEnvio,
+  confirmarPagina,
   listarArquivosParaBaixar,
   listarCategorias,
+  listarEnviosPendentes,
+  listarPaginasParaApagar,
+  listarPaginasPendentes,
   marcarArquivoLocal,
+  removerPagina,
   salvarCategorias,
   salvarPerguntas,
   substituirEnvios,
@@ -82,14 +90,90 @@ async function baixarArquivos(): Promise<void> {
   }
 }
 
-/** Uma sincronização por vez; chamadas repetidas aproveitam a que está rodando. */
+const TIPOS: Record<string, string> = {
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  ogg: 'audio/ogg',
+  opus: 'audio/ogg',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  heic: 'image/heic',
+};
+
+export function arquivoLocal(uri: string, nome: string): ArquivoLocal {
+  const extensao = nome.split('.').pop()?.toLowerCase() ?? '';
+  return { uri, nome, tipo: TIPOS[extensao] ?? 'application/octet-stream' };
+}
+
+/**
+ * Envia, na ordem certa, o que foi feito no celular: primeiro as perguntas
+ * enviadas pelo WhatsApp, depois as respostas (que dependem do envio) e por
+ * fim as páginas apagadas. Uma falha de conexão interrompe tudo e fica para
+ * a próxima vez; um erro de regra numa página não trava as outras.
+ */
+async function enviarPendencias(): Promise<void> {
+  for (const envio of await listarEnviosPendentes()) {
+    const criado = await api.enviarPergunta(envio.idosoId, envio.perguntaId);
+    await confirmarEnvio(envio.id, criado.id, criado.linkWhatsApp, criado.mensagem);
+  }
+
+  for (const pagina of await listarPaginasPendentes()) {
+    try {
+      const nomeDaFoto = pagina.fotoLocal ? `foto.${extensaoDe(pagina.fotoLocal) || 'jpg'}` : null;
+      const criada = await api.guardarResposta(pagina.envioId, {
+        titulo: pagina.titulo,
+        transcricao: pagina.transcricao,
+        duracaoSegundos: pagina.duracaoSegundos,
+        // A mesma chave em todas as tentativas: a API devolve a página que já existe, sem duplicar.
+        chaveIdempotencia: pagina.chave,
+        audio: arquivoLocal(pagina.audioLocal, pagina.audioNome),
+        foto: pagina.fotoLocal && nomeDaFoto ? arquivoLocal(pagina.fotoLocal, nomeDaFoto) : null,
+      });
+      await confirmarPagina(criada);
+    } catch (falha) {
+      if (ehFalhaDeConexao(falha)) {
+        throw falha;
+      }
+    }
+  }
+
+  for (const pagina of await listarPaginasParaApagar()) {
+    try {
+      await api.apagarPagina(pagina.id);
+      await removerPagina(pagina.chave);
+    } catch (falha) {
+      if (falha instanceof ApiError && falha.status === 404) {
+        await removerPagina(pagina.chave);
+      } else if (ehFalhaDeConexao(falha)) {
+        throw falha;
+      }
+    }
+  }
+}
+
+/**
+ * Uma sincronização por vez. Se alguém pedir outra no meio (uma resposta nova
+ * guardada, por exemplo), ela roda de novo logo em seguida.
+ */
+let pedirDeNovo = false;
+
 export function sincronizar(familiaId: number): Promise<void> {
-  emAndamento ??= (async () => {
+  if (emAndamento) {
+    pedirDeNovo = true;
+    return emAndamento;
+  }
+  emAndamento = (async () => {
     try {
       await abrirBanco();
       await garantirCatalogo();
-      await baixarDadosDaFamilia(familiaId);
-      avisarMudanca();
+      do {
+        pedirDeNovo = false;
+        await enviarPendencias();
+        await baixarDadosDaFamilia(familiaId);
+        avisarMudanca();
+      } while (pedirDeNovo);
       await baixarArquivos();
       avisarMudanca();
     } finally {

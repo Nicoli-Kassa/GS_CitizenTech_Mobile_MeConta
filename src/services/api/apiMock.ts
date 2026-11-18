@@ -1,9 +1,12 @@
 import { Asset } from 'expo-asset';
 
 import type {
+  AnalisePrivacidade,
+  Aviso,
   Categoria,
   Convite,
   Envio,
+  ExplicacaoDeRisco,
   FamiliaDetalhe,
   FamiliaResumo,
   Idoso,
@@ -11,11 +14,15 @@ import type {
   IndicadorConversas,
   ListaPaginada,
   Membro,
+  MemoriaDoBairro,
   NovaResposta,
   Pagina,
   PapelNaFamilia,
   Pergunta,
   PerguntaDaSemana,
+  PortaRetrato,
+  Publicacao,
+  PublicarMemoriaRequest,
   Sessao,
   StatusEnvio,
 } from '../../types/api';
@@ -34,7 +41,8 @@ import {
 } from '../../utils/regras';
 import { gravarPreferencia, lerPreferencia } from '../banco/banco';
 import { CATEGORIAS, PERGUNTAS_DO_CATALOGO } from './catalogo';
-import type { ApiMeConta } from './contrato';
+import { PublicacaoRecusadaError, type ApiMeConta } from './contrato';
+import { analisarTexto, explicarAnalise } from './motorDeDemonstracao';
 
 /**
  * Servidor de demonstração que roda no próprio celular.
@@ -53,9 +61,11 @@ type UsuarioMock = { email: string; senha: string; membroId: number | null };
 type PerguntaDaFamiliaMock = Pergunta & { familiaId: number };
 type EnvioMock = Envio & { categoriaId: number };
 type ConviteMock = Convite & { familiaId: number };
+type MemoriaMock = MemoriaDoBairro & { paginaId: number | null; noMapa: boolean };
+type AvisoMock = Aviso & { familiaId: number };
 
 type EstadoMock = {
-  versao: 1;
+  versao: 2;
   proximoId: number;
   usuarios: UsuarioMock[];
   membros: Membro[];
@@ -65,6 +75,9 @@ type EstadoMock = {
   perguntasDaFamilia: PerguntaDaFamiliaMock[];
   envios: EnvioMock[];
   paginas: Pagina[];
+  memorias: MemoriaMock[];
+  avisos: AvisoMock[];
+  portaRetratos: PortaRetrato[];
 };
 
 const CHAVE_ESTADO = 'mock-servidor';
@@ -121,11 +134,41 @@ function estadoInicial(): EstadoMock {
     cadastradoEm: diasAtras(40),
   };
 
-  const memorias: { perguntaId: number; titulo: string; dias: number }[] = [
-    { perguntaId: 6, titulo: 'O baile em que conheci seu avô', dias: 30 },
-    { perguntaId: 12, titulo: 'O ateliê de costura da sala', dias: 16 },
-    { perguntaId: 16, titulo: 'Quando a rua ainda era de terra', dias: 9 },
-    { perguntaId: 1, titulo: 'O bolo de fubá de domingo', dias: 2 },
+  // As três últimas são iguais às páginas que a API cria para mostrar o filtro de dados pessoais.
+  const memorias: { perguntaId: number; titulo: string; dias: number; transcricao: string | null }[] = [
+    {
+      perguntaId: 6,
+      titulo: 'O baile em que conheci seu avô',
+      dias: 30,
+      transcricao: 'Foi no baile do clube, em 1974. Ele pisou no meu pé duas vezes e mesmo assim eu aceitei a terceira música.',
+    },
+    { perguntaId: 12, titulo: 'O ateliê de costura da sala', dias: 16, transcricao: null },
+    {
+      perguntaId: 11,
+      titulo: 'A fábrica de tecidos',
+      dias: 12,
+      transcricao: 'Entrei na fábrica em 1962. Pediram meu CPF, 123.456.789-09, e a carteira de trabalho. Eu tinha dezesseis anos.',
+    },
+    {
+      perguntaId: 16,
+      titulo: 'Quando a rua ainda era de terra',
+      dias: 9,
+      transcricao:
+        'Morei na Rua das Flores, 123 a vida inteira. Quando cheguei era tudo barro, e a gente ia buscar pão de bicicleta.',
+    },
+    {
+      perguntaId: 5,
+      titulo: 'Os chás da vó',
+      dias: 5,
+      transcricao: 'Hoje tomo remédio para pressão, mas o chá de erva-cidreira continua todo fim de tarde.',
+    },
+    {
+      perguntaId: 1,
+      titulo: 'O bolo de fubá de domingo',
+      dias: 2,
+      transcricao:
+        'Três ovos caipiras, uma xícara de açúcar e manteiga da venda do seu Joaquim. A panela de pressão fica de fora: bolo é no forno.',
+    },
   ];
 
   const envios: EnvioMock[] = [];
@@ -161,15 +204,17 @@ function estadoInicial(): EstadoMock {
       fotoUrl: null,
       criadaPorMembroId: 1,
       chaveIdempotencia: uuid(),
+      transcricao: memoria.transcricao,
       criadaEm: diasAtras(memoria.dias),
     });
   });
+  const proximoEnvio = envios.length + 1;
 
   // Uma pergunta enviada ontem, ainda esperando a resposta.
   const aguardando = catalogo(22);
   const mensagem = montarMensagem(lourdes.apelido, aguardando.texto);
   envios.push({
-    id: 5,
+    id: proximoEnvio,
     idosoId: lourdes.id,
     perguntaId: aguardando.id,
     pergunta: aguardando.texto,
@@ -183,7 +228,7 @@ function estadoInicial(): EstadoMock {
   });
 
   return {
-    versao: 1,
+    versao: 2,
     proximoId: 100,
     usuarios: [
       { email: 'bia@example.com', senha: SENHA_DEMONSTRACAO, membroId: 1 },
@@ -209,6 +254,48 @@ function estadoInicial(): EstadoMock {
     perguntasDaFamilia: [],
     envios,
     paginas,
+    // Memórias de outras famílias (fictícias), já publicadas no caderno de Pirituba.
+    memorias: [
+      {
+        id: 1,
+        paginaId: null,
+        noMapa: true,
+        bairro: 'Pirituba',
+        titulo: 'A padaria que virou farmácia',
+        apelido: 'Dona Cida',
+        transcricao: 'Na esquina tinha a padaria do seu Manuel. O pão saía às seis, e a fila dava volta no quarteirão.',
+        categoriaId: 4,
+        audioUrl: AUDIO_DEMO,
+        publicadaEm: diasAtras(20),
+      },
+      {
+        id: 2,
+        paginaId: null,
+        noMapa: true,
+        bairro: 'Pirituba',
+        titulo: 'O trem das seis e meia',
+        apelido: 'Seu Zé',
+        transcricao: 'Eu pegava o trem das seis e meia para a Lapa. Todo mundo se conhecia no vagão.',
+        categoriaId: 4,
+        audioUrl: AUDIO_DEMO,
+        publicadaEm: diasAtras(11),
+      },
+    ],
+    // A Vó Lourdes apertou "quero contar" no porta-retrato para a pergunta que está esperando.
+    avisos: [
+      {
+        id: 1,
+        familiaId: 1,
+        idosoId: lourdes.id,
+        apelido: lourdes.apelido,
+        envioId: proximoEnvio,
+        pergunta: aguardando.texto,
+        criadoEm: diasAtras(0, Math.max(0, new Date().getUTCHours() - 1)),
+        visto: false,
+        vistoEm: null,
+      },
+    ],
+    portaRetratos: [{ id: 1, idosoId: lourdes.id, codigo: 'PR-LOURDES', conectado: true, ultimoContatoEm: new Date().toISOString() }],
   };
 }
 
@@ -217,8 +304,12 @@ export class ApiMock implements ApiMeConta {
   private token: string | null = null;
   private estado: EstadoMock | null = null;
 
-  definirToken(token: string | null): void {
-    this.token = token;
+  definirSessao(sessao: Sessao | null): void {
+    this.token = sessao?.accessToken ?? null;
+  }
+
+  aoRenovarSessao(): void {
+    // No modo de demonstração a sessão não vence.
   }
 
   // ---------- estado ----------
@@ -232,13 +323,13 @@ export class ApiMock implements ApiMeConta {
     if (salvo) {
       try {
         const lido = JSON.parse(salvo) as EstadoMock;
-        estado = lido.versao === 1 ? lido : null;
+        estado = lido.versao === 2 ? lido : null;
       } catch {
         estado = null;
       }
     }
     this.estado = estado ?? estadoInicial();
-    if (!salvo) {
+    if (!estado) {
       await this.salvar();
     }
     return this.estado;
@@ -255,12 +346,22 @@ export class ApiMock implements ApiMeConta {
     return estado.proximoId;
   }
 
-  /** Membro dono do token. Sem token válido: 401, como na API. */
-  private membroAtual(estado: EstadoMock): Membro {
-    const id = this.token?.startsWith('mock-membro-') ? Number(this.token.slice('mock-membro-'.length)) : NaN;
-    const membro = estado.membros.find((item) => item.id === id);
-    if (!membro) {
+  /** Usuário dono do token (`mock-<email>`). */
+  private usuarioAtual(estado: EstadoMock): UsuarioMock {
+    const email = this.token?.startsWith('mock-') ? this.token.slice('mock-'.length) : '';
+    const usuario = estado.usuarios.find((u) => u.email === email);
+    if (!usuario) {
       throw new ApiError(401, 'Sua sessão expirou. Entre de novo.');
+    }
+    return usuario;
+  }
+
+  /** Membro dono do token. Sem perfil: 403, como na API. */
+  private membroAtual(estado: EstadoMock): Membro {
+    const usuario = this.usuarioAtual(estado);
+    const membro = estado.membros.find((item) => item.id === usuario.membroId);
+    if (!membro) {
+      throw new ApiError(403, 'Crie o seu perfil para continuar.');
     }
     return membro;
   }
@@ -353,8 +454,7 @@ export class ApiMock implements ApiMeConta {
     if (!usuario || usuario.senha !== senha) {
       throw new ApiError(401, 'E-mail ou senha incorretos.');
     }
-    const token = usuario.membroId ? `mock-membro-${usuario.membroId}` : `mock-usuario-${usuario.email}`;
-    return { tokenType: 'Bearer', accessToken: token, expiresIn: 3600, refreshToken: '' };
+    return { tokenType: 'Bearer', accessToken: `mock-${usuario.email}`, expiresIn: 3600, refreshToken: '' };
   }
 
   async cadastrar(email: string, senha: string): Promise<void> {
@@ -377,11 +477,7 @@ export class ApiMock implements ApiMeConta {
   async criarPerfil(nome: string): Promise<Membro> {
     await esperar();
     const estado = await this.carregar();
-    const email = this.token?.startsWith('mock-usuario-') ? this.token.slice('mock-usuario-'.length) : null;
-    const usuario = estado.usuarios.find((u) => u.email === email);
-    if (!usuario) {
-      throw new ApiError(401, 'Sua sessão expirou. Entre de novo.');
-    }
+    const usuario = this.usuarioAtual(estado);
     if (usuario.membroId) {
       throw new ApiError(409, 'O seu perfil já foi criado.');
     }
@@ -392,22 +488,13 @@ export class ApiMock implements ApiMeConta {
     const membro: Membro = { id: this.novoId(estado), nome: limpo, criadoEm: new Date().toISOString() };
     estado.membros.push(membro);
     usuario.membroId = membro.id;
-    this.token = `mock-membro-${membro.id}`;
     await this.salvar();
     return membro;
-  }
-
-  /** No mock, o token muda depois de criar o perfil. */
-  tokenAtual(): string | null {
-    return this.token;
   }
 
   async obterPerfil(): Promise<Membro> {
     await esperar(150);
     const estado = await this.carregar();
-    if (this.token?.startsWith('mock-usuario-')) {
-      throw new ApiError(403, 'Crie o seu perfil para continuar.');
-    }
     return this.membroAtual(estado);
   }
 
@@ -660,6 +747,7 @@ export class ApiMock implements ApiMeConta {
       fotoUrl: resposta.foto?.uri ?? null,
       criadaPorMembroId: membro.id,
       chaveIdempotencia: resposta.chaveIdempotencia,
+      transcricao: resposta.transcricao?.trim() ? resposta.transcricao.trim() : null,
       criadaEm: agora,
     };
     estado.paginas.push(pagina);
@@ -701,6 +789,11 @@ export class ApiMock implements ApiMeConta {
       throw new ApiError(403, 'Só quem guardou a página pode apagá-la.');
     }
     estado.paginas = estado.paginas.filter((p) => p.id !== paginaId);
+    estado.memorias.forEach((m) => {
+      if (m.paginaId === paginaId) {
+        m.noMapa = false;
+      }
+    });
     const envio = estado.envios.find((e) => e.id === pagina.envioId);
     if (envio) {
       // Na API a pergunta volta a ficar esperando resposta.
@@ -718,6 +811,145 @@ export class ApiMock implements ApiMeConta {
       return asset.localUri ?? asset.uri;
     }
     return caminho;
+  }
+
+  async definirTranscricao(paginaId: number, texto: string | null): Promise<Pagina> {
+    await esperar();
+    const estado = await this.carregar();
+    const pagina = this.paginaDoMembro(estado, paginaId);
+    const limpo = texto?.trim() ?? '';
+    if (limpo.length > 4000) {
+      throw new ApiError(400, 'Use até 4000 caracteres na transcrição');
+    }
+    pagina.transcricao = limpo.length > 0 ? limpo : null;
+    await this.salvar();
+    return pagina;
+  }
+
+  private paginaDoMembro(estado: EstadoMock, paginaId: number): Pagina {
+    const pagina = estado.paginas.find((p) => p.id === paginaId);
+    if (!pagina) {
+      throw new ApiError(404, 'Página não encontrada.');
+    }
+    this.idosoDoMembro(estado, pagina.idosoId);
+    return pagina;
+  }
+
+  // ---------- mapa do bairro ----------
+
+  async analisarPrivacidade(paginaId: number): Promise<AnalisePrivacidade> {
+    await esperar(400);
+    const estado = await this.carregar();
+    const pagina = this.paginaDoMembro(estado, paginaId);
+    return analisarTexto(pagina.id, pagina.titulo, pagina.transcricao);
+  }
+
+  async explicarRisco(paginaId: number): Promise<ExplicacaoDeRisco> {
+    await esperar(900);
+    return explicarAnalise(await this.analisarPrivacidade(paginaId));
+  }
+
+  async publicarNoBairro(paginaId: number, pedido: PublicarMemoriaRequest): Promise<Publicacao> {
+    await esperar(500);
+    const estado = await this.carregar();
+    const pagina = this.paginaDoMembro(estado, paginaId);
+    if (!pedido.idosoAutorizou) {
+      throw new ApiError(400, `Marque que ${pagina.idosoApelido} autorizou a publicação no mapa do bairro`);
+    }
+    const bairro = pedido.bairro.trim();
+    if (bairro.length === 0) {
+      throw new ApiError(400, 'Escolha o bairro da memória');
+    }
+    if (/\d/.test(bairro) || /\b(rua|avenida|av\.)\b/i.test(bairro)) {
+      throw new ApiError(400, 'Use só o nome do bairro, sem rua, número ou outro dado pessoal');
+    }
+    if (estado.memorias.some((m) => m.paginaId === paginaId && m.noMapa)) {
+      throw new ApiError(409, 'Esta memória já está no mapa do bairro');
+    }
+    const analise = analisarTexto(pagina.id, pagina.titulo, pagina.transcricao);
+    if (analise.bloqueada || (analise.exigeConfirmacao && !pedido.confirmoDadosPessoais)) {
+      throw new PublicacaoRecusadaError('Publicação recusada pelo filtro de dados pessoais', {
+        ...analise,
+        resultado: analise.bloqueada ? 'Bloqueada' : 'PrecisaConfirmar',
+      });
+    }
+    const memoria: MemoriaMock = {
+      id: this.novoId(estado),
+      paginaId,
+      noMapa: true,
+      bairro,
+      titulo: pagina.titulo,
+      apelido: pagina.idosoApelido,
+      transcricao: pagina.transcricao,
+      categoriaId: pagina.categoriaId,
+      audioUrl: pagina.audioUrl,
+      publicadaEm: new Date().toISOString(),
+    };
+    estado.memorias.push(memoria);
+    await this.salvar();
+    const { paginaId: _p, noMapa: _n, ...publica } = memoria;
+    return { memoria: publica, analise: { ...analise, resultado: 'Publicada' } };
+  }
+
+  async tirarDoMapa(paginaId: number): Promise<void> {
+    await esperar();
+    const estado = await this.carregar();
+    this.paginaDoMembro(estado, paginaId);
+    const memoria = estado.memorias.find((m) => m.paginaId === paginaId && m.noMapa);
+    if (!memoria) {
+      throw new ApiError(404, 'Esta memória não está no mapa do bairro.');
+    }
+    memoria.noMapa = false;
+    await this.salvar();
+  }
+
+  async listarMemoriasDoBairro(bairro: string): Promise<MemoriaDoBairro[]> {
+    await esperar();
+    const estado = await this.carregar();
+    const procurado = bairro.trim().toLowerCase();
+    return estado.memorias
+      .filter((m) => m.noMapa && m.bairro.toLowerCase() === procurado)
+      .sort((a, b) => b.publicadaEm.localeCompare(a.publicadaEm))
+      .map(({ paginaId: _p, noMapa: _n, ...publica }) => publica);
+  }
+
+  async enderecoDoAudioPublico(caminho: string): Promise<string> {
+    return this.baixarArquivo(caminho);
+  }
+
+  // ---------- porta-retrato ----------
+
+  async listarAvisos(familiaId: number, somenteNaoVistos: boolean): Promise<Aviso[]> {
+    await esperar(150);
+    const estado = await this.carregar();
+    this.familiaDoMembro(estado, familiaId);
+    return estado.avisos
+      .filter((a) => a.familiaId === familiaId && (!somenteNaoVistos || !a.visto))
+      .sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
+      .map(({ familiaId: _f, ...aviso }) => aviso);
+  }
+
+  async marcarAvisoVisto(avisoId: number): Promise<Aviso> {
+    await esperar();
+    const estado = await this.carregar();
+    const aviso = estado.avisos.find((a) => a.id === avisoId);
+    if (!aviso) {
+      throw new ApiError(404, 'Aviso não encontrado.');
+    }
+    this.familiaDoMembro(estado, aviso.familiaId);
+    aviso.visto = true;
+    aviso.vistoEm = new Date().toISOString();
+    await this.salvar();
+    const { familiaId: _f, ...publico } = aviso;
+    return publico;
+  }
+
+  async obterPortaRetrato(idosoId: number): Promise<PortaRetrato | null> {
+    await esperar(150);
+    const estado = await this.carregar();
+    this.idosoDoMembro(estado, idosoId);
+    const portaRetrato = estado.portaRetratos.find((p) => p.idosoId === idosoId);
+    return portaRetrato ? { ...portaRetrato, ultimoContatoEm: new Date().toISOString() } : null;
   }
 
   async obterIndicador(): Promise<IndicadorConversas> {

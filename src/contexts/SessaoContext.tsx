@@ -1,18 +1,20 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
+import * as Network from 'expo-network';
 
-import { CONTA_DEMONSTRACAO, USANDO_MOCK } from '../config/appConfig';
 import { api } from '../services/api';
 import { gravarPreferencia, lerPreferencia, limparDadosDaFamilia } from '../services/banco/banco';
 import { garantirCatalogo, sincronizar } from '../services/sincronizacao';
-import { gravarToken, lerToken } from '../services/tokenStorage';
-import type { Membro } from '../types/api';
+import { gravarSessao, lerSessao } from '../services/tokenStorage';
+import type { FamiliaResumo, Membro } from '../types/api';
 import { ApiError, describeError, ehFalhaDeConexao } from '../utils/errors';
 
 /**
  * Sessão de quem usa o app: login, perfil e a família aberta no caderno.
  *
  * Funciona sem internet: o último membro e a última família ficam no banco
- * local, e o caderno abre com o que já foi sincronizado.
+ * local, e o caderno abre com o que já foi sincronizado. Quando a conexão
+ * volta, o que foi feito no celular sobe sozinho para a API.
  */
 
 export type StatusSessao = 'iniciando' | 'sem-sessao' | 'sem-perfil' | 'sem-familia' | 'pronto';
@@ -29,6 +31,10 @@ export type SessaoContextValue = {
   online: boolean;
   error: string | null;
   entrar: (email: string, senha: string) => Promise<void>;
+  cadastrar: (nome: string, email: string, senha: string) => Promise<void>;
+  criarPerfil: (nome: string) => Promise<void>;
+  criarFamilia: (nome: string) => Promise<void>;
+  aceitarConvite: (codigo: string) => Promise<void>;
   sair: () => Promise<void>;
   sincronizarAgora: () => Promise<void>;
   clearError: () => void;
@@ -81,7 +87,19 @@ export function SessaoProvider({ children }: SessaoProviderProps): React.JSX.Ele
     }
   }, []);
 
-  /** Com o token já definido: carrega perfil e família, ou usa o que está salvo se estiver offline. */
+  const abrirFamilia = useCallback(
+    async (escolhida: FamiliaResumo | FamiliaAberta) => {
+      const aberta = { id: escolhida.id, nome: escolhida.nome };
+      familiaRef.current = aberta;
+      setFamilia(aberta);
+      await gravarPreferencia(CHAVE_FAMILIA, JSON.stringify(aberta));
+      setStatus('pronto');
+      void rodarSincronizacao(aberta.id);
+    },
+    [rodarSincronizacao],
+  );
+
+  /** Com a sessão já definida: carrega perfil e família, ou usa o que está salvo se estiver offline. */
   const carregarSessao = useCallback(async () => {
     try {
       const perfil = await api.obterPerfil();
@@ -91,17 +109,12 @@ export function SessaoProvider({ children }: SessaoProviderProps): React.JSX.Ele
       const familias = await api.listarFamilias();
       const salva = await lerJson<FamiliaAberta>(CHAVE_FAMILIA);
       const escolhida = familias.find((f) => f.id === salva?.id) ?? familias[0];
+      setOnline(true);
       if (!escolhida) {
         setStatus('sem-familia');
         return;
       }
-      const aberta = { id: escolhida.id, nome: escolhida.nome };
-      familiaRef.current = aberta;
-      setFamilia(aberta);
-      await gravarPreferencia(CHAVE_FAMILIA, JSON.stringify(aberta));
-      setOnline(true);
-      setStatus('pronto');
-      void rodarSincronizacao(aberta.id);
+      await abrirFamilia(escolhida);
     } catch (falha) {
       if (ehFalhaDeConexao(falha)) {
         // Sem internet: abre com o que já está no celular.
@@ -123,20 +136,20 @@ export function SessaoProvider({ children }: SessaoProviderProps): React.JSX.Ele
         setStatus('sem-perfil');
         return;
       }
-      await gravarToken(null);
-      api.definirToken(null);
+      await gravarSessao(null);
+      api.definirSessao(null);
       setError(describeError(falha, 'Não foi possível abrir a sua conta.'));
       setStatus('sem-sessao');
     }
-  }, [rodarSincronizacao]);
+  }, [abrirFamilia]);
 
   const entrar = useCallback(
     async (email: string, senha: string) => {
       setError(null);
       try {
         const sessao = await api.entrar(email.trim(), senha);
-        api.definirToken(sessao.accessToken);
-        await gravarToken(sessao.accessToken);
+        api.definirSessao(sessao);
+        await gravarSessao(sessao);
         await carregarSessao();
       } catch (falha) {
         setError(describeError(falha, 'Não foi possível entrar.'));
@@ -146,22 +159,69 @@ export function SessaoProvider({ children }: SessaoProviderProps): React.JSX.Ele
     [carregarSessao],
   );
 
+  const cadastrar = useCallback(
+    async (nome: string, email: string, senha: string) => {
+      setError(null);
+      try {
+        await api.cadastrar(email.trim(), senha);
+        const sessao = await api.entrar(email.trim(), senha);
+        api.definirSessao(sessao);
+        await gravarSessao(sessao);
+        const perfil = await api.criarPerfil(nome.trim());
+        setMembro(perfil);
+        await gravarPreferencia(CHAVE_MEMBRO, JSON.stringify(perfil));
+        setStatus('sem-familia');
+      } catch (falha) {
+        setError(describeError(falha, 'Não foi possível criar a conta.'));
+        throw falha;
+      }
+    },
+    [],
+  );
+
+  const criarPerfil = useCallback(
+    async (nome: string) => {
+      setError(null);
+      await api.criarPerfil(nome.trim());
+      await carregarSessao();
+    },
+    [carregarSessao],
+  );
+
+  const criarFamilia = useCallback(
+    async (nome: string) => {
+      setError(null);
+      const criada = await api.criarFamilia(nome);
+      await abrirFamilia(criada);
+    },
+    [abrirFamilia],
+  );
+
+  const aceitarConvite = useCallback(
+    async (codigo: string) => {
+      setError(null);
+      const detalhe = await api.aceitarConvite(codigo);
+      await abrirFamilia(detalhe);
+    },
+    [abrirFamilia],
+  );
+
   useEffect(() => {
+    // Token renovado no meio do uso: guarda o novo para o próximo login automático.
+    api.aoRenovarSessao((sessao) => {
+      void gravarSessao(sessao);
+    });
+
     let ativo = true;
     (async () => {
       await garantirCatalogo();
-      const token = await lerToken();
+      const sessao = await lerSessao();
       if (!ativo) {
         return;
       }
-      if (token) {
-        api.definirToken(token);
+      if (sessao) {
+        api.definirSessao(sessao);
         await carregarSessao();
-        return;
-      }
-      if (USANDO_MOCK) {
-        // Modo de demonstração: entra direto como a Bia, para o caderno abrir na hora.
-        await entrar(CONTA_DEMONSTRACAO.email, CONTA_DEMONSTRACAO.senha).catch(() => setStatus('sem-sessao'));
         return;
       }
       setStatus('sem-sessao');
@@ -172,11 +232,24 @@ export function SessaoProvider({ children }: SessaoProviderProps): React.JSX.Ele
     return () => {
       ativo = false;
     };
-  }, [carregarSessao, entrar]);
+  }, [carregarSessao]);
+
+  // Quando a internet volta, sobe o que ficou guardado no celular.
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+    const assinatura = Network.addNetworkStateListener((estado) => {
+      if (estado.isConnected && estado.isInternetReachable !== false && familiaRef.current) {
+        void rodarSincronizacao(familiaRef.current.id);
+      }
+    });
+    return () => assinatura.remove();
+  }, [rodarSincronizacao]);
 
   const sair = useCallback(async () => {
-    api.definirToken(null);
-    await gravarToken(null);
+    api.definirSessao(null);
+    await gravarSessao(null);
     await limparDadosDaFamilia();
     familiaRef.current = null;
     setMembro(null);
@@ -193,8 +266,23 @@ export function SessaoProvider({ children }: SessaoProviderProps): React.JSX.Ele
   const clearError = useCallback(() => setError(null), []);
 
   const value = useMemo<SessaoContextValue>(
-    () => ({ status, membro, familia, sincronizando, online, error, entrar, sair, sincronizarAgora, clearError }),
-    [status, membro, familia, sincronizando, online, error, entrar, sair, sincronizarAgora, clearError],
+    () => ({
+      status,
+      membro,
+      familia,
+      sincronizando,
+      online,
+      error,
+      entrar,
+      cadastrar,
+      criarPerfil,
+      criarFamilia,
+      aceitarConvite,
+      sair,
+      sincronizarAgora,
+      clearError,
+    }),
+    [status, membro, familia, sincronizando, online, error, entrar, cadastrar, criarPerfil, criarFamilia, aceitarConvite, sair, sincronizarAgora, clearError],
   );
 
   return <SessaoContext.Provider value={value}>{children}</SessaoContext.Provider>;

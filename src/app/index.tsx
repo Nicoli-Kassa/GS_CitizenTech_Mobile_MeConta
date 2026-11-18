@@ -1,25 +1,25 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { BoasVindas } from '../components/BoasVindas';
 import { BotaoDeCanto } from '../components/BotaoDeCanto';
-import { Botao } from '../components/Botao';
 import { AbasDeCategoria } from '../components/caderno/AbasDeCategoria';
 import { Caderno } from '../components/caderno/Caderno';
+import { AvisoQueroContar } from '../components/caderno/AvisoQueroContar';
 import { Capa } from '../components/caderno/Capa';
 import { FolhaEsperandoView } from '../components/caderno/FolhaEsperandoView';
 import { FolhaMemoriaView } from '../components/caderno/FolhaMemoriaView';
 import { FolhaVazia } from '../components/caderno/FolhaVazia';
 import { Mesa } from '../components/Mesa';
-import { Papel } from '../components/Papel';
-import { USANDO_MOCK } from '../config/appConfig';
 import { useSessao } from '../contexts/SessaoContext';
+import { useAvisos } from '../hooks/useAvisos';
 import { useCaderno } from '../hooks/useCaderno';
 import { useMovimentoReduzido } from '../hooks/useMovimentoReduzido';
 import { chaveDaFolha, type Folha } from '../types/caderno';
-import { colors, fonts, fontSize, radius, spacing } from '../theme/theme';
+import { colors, fonts, fontSize, spacing } from '../theme/theme';
 
 /**
  * Tela inicial: o caderno da família.
@@ -42,40 +42,15 @@ export default function CadernoScreen(): React.JSX.Element {
     );
   }
 
+  if (sessao.status === 'sem-sessao') {
+    return <Redirect href="/entrar" />;
+  }
+
   if (sessao.status !== 'pronto' || !sessao.familia) {
-    return <SemCaderno />;
+    return <BoasVindas />;
   }
 
   return <CadernoAberto familiaId={sessao.familia.id} nomeDaFamilia={sessao.familia.nome} />;
-}
-
-/** Login, perfil e criação da família chegam na Etapa 3. */
-function SemCaderno(): React.JSX.Element {
-  const { status, error, entrar } = useSessao();
-  const mensagem =
-    status === 'sem-familia'
-      ? 'Você ainda não tem um caderno de família.'
-      : status === 'sem-perfil'
-        ? 'Falta criar o seu perfil.'
-        : (error ?? 'Entre na sua conta para abrir o caderno.');
-  return (
-    <Mesa>
-      <View style={styles.centro}>
-        <Papel style={styles.cartao}>
-          <Text style={styles.cartaoTitulo} accessibilityRole="header">
-            Me Conta
-          </Text>
-          <Text style={styles.cartaoTexto}>{mensagem}</Text>
-          {USANDO_MOCK ? (
-            <Botao
-              label="Entrar na demonstração"
-              onPress={() => void entrar('bia@example.com', 'MeConta@2026').catch(() => undefined)}
-            />
-          ) : null}
-        </Papel>
-      </View>
-    </Mesa>
-  );
 }
 
 type CadernoAbertoProps = {
@@ -86,6 +61,8 @@ type CadernoAbertoProps = {
 function CadernoAberto({ familiaId, nomeDaFamilia }: CadernoAbertoProps): React.JSX.Element {
   const { sincronizando, online } = useSessao();
   const { folhas, categorias, isLoading } = useCaderno(familiaId);
+  const { avisos, marcarVisto } = useAvisos(familiaId);
+  const aviso = avisos[0];
   const reduzido = useMovimentoReduzido();
 
   const [filtro, setFiltro] = useState<string | null>(null);
@@ -104,6 +81,9 @@ function CadernoAberto({ familiaId, nomeDaFamilia }: CadernoAbertoProps): React.
 
   const medir = useCallback((evento: LayoutChangeEvent) => {
     const { width, height } = evento.nativeEvent.layout;
+    if (width <= 0 || height <= 0) {
+      return;
+    }
     setArea({ largura: Math.min(width - spacing.lg * 2, 540), altura: height });
   }, []);
 
@@ -137,6 +117,7 @@ function CadernoAberto({ familiaId, nomeDaFamilia }: CadernoAbertoProps): React.
           categoriaNome={categoria?.nome ?? null}
           largura={area?.largura ?? 320}
           ativa={ativa && aberto}
+          onAbrir={() => router.push({ pathname: '/pagina/[chave]', params: { chave: folha.chave } })}
         />
       );
     },
@@ -205,6 +186,19 @@ function CadernoAberto({ familiaId, nomeDaFamilia }: CadernoAbertoProps): React.
         ) : (
           <ActivityIndicator color={colors.dourado} />
         )}
+        {aviso && aberto ? (
+          <View style={styles.aviso} pointerEvents="box-none">
+            <AvisoQueroContar
+              key={aviso.id}
+              aviso={aviso}
+              onVisto={() => void marcarVisto(aviso.id)}
+              onGuardar={(envioId) => {
+                void marcarVisto(aviso.id);
+                router.push({ pathname: '/resposta/[envioId]', params: { envioId: String(envioId) } });
+              }}
+            />
+          </View>
+        ) : null}
       </View>
 
     </Mesa>
@@ -223,23 +217,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.maquina,
     fontSize: fontSize.md,
     color: colors.papel,
-  },
-  cartao: {
-    alignSelf: 'stretch',
-    gap: spacing.lg,
-    padding: spacing.xl,
-    borderRadius: radius.md,
-  },
-  cartaoTitulo: {
-    fontFamily: fonts.manuscrita,
-    fontSize: fontSize.manuscritoXl,
-    color: colors.tinta,
-  },
-  cartaoTexto: {
-    fontFamily: fonts.livro,
-    fontSize: fontSize.md,
-    lineHeight: fontSize.md * 1.5,
-    color: colors.tinta,
   },
   cabecalho: {
     flexDirection: 'row',
@@ -272,6 +249,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingBottom: spacing.lg,
+  },
+  aviso: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
   },
   giroCapa: {
     transformOrigin: 'left center',

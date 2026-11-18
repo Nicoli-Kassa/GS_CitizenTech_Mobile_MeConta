@@ -16,8 +16,8 @@ export const colors = {
   kraft: '#D4B483',
   /** Texto principal. */
   tinta: '#3A2A1E',
-  /** Texto secundário. Sobre papel: 6,5:1. Não usar sobre kraft. */
-  tintaSuave: '#6A4B33',
+  /** Texto secundário. Sobre papel: 8,3:1; sobre kraft: 5,1:1. */
+  tintaSuave: '#563C2A',
   /** Texto claro sobre tinta, capa e abas escuras. Sobre tinta: 12,5:1. */
   creme: '#FBF4E2',
   /** Capa de tecido. Título dourado sobre a capa: 7,2:1. */
@@ -27,9 +27,9 @@ export const colors = {
   /** Fita adesiva (washi), semitransparente sobre a foto. */
   fita: 'rgba(233, 216, 166, 0.82)',
   sombra: '#000000',
-  /** Erro: vermelho-tijolo. Sobre papel: 6,1:1. */
-  erro: '#9C2F1F',
-  sucesso: '#3E6B34',
+  /** Erro: vermelho-tijolo. Sobre papel: 8,0:1; sobre kraft: 5,0:1. */
+  erro: '#7E2416',
+  sucesso: '#335A2B',
 } as const;
 
 /**

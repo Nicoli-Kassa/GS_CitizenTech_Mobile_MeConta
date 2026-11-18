@@ -51,9 +51,14 @@ export default function RootLayout(): React.JSX.Element | null {
               animation: 'fade',
             }}>
             <Stack.Screen name="index" />
+            <Stack.Screen name="entrar" />
+            <Stack.Screen name="cadastro" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="perguntar" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="familia" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="resposta/[envioId]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="pagina/[chave]" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="familia" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="ensine/[idosoId]" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="bairro" options={{ animation: 'slide_from_right' }} />
           </Stack>
         </SessaoProvider>
       </SafeAreaProvider>

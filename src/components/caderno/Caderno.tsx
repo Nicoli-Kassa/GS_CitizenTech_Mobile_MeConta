@@ -233,6 +233,7 @@ export function Caderno<T>({
                 {atual ? (
                   <Animated.View
                     key={`a-${chaveDaFolha(atual)}`}
+                    testID="folha-atual"
                     entering={reduzido ? FadeIn.duration(180) : undefined}
                     style={[StyleSheet.absoluteFill, styles.giro, estiloAtual]}>
                     {folhaFisica(renderFolha(atual, true))}

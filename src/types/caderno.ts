@@ -24,6 +24,10 @@ export type FolhaMemoria = {
   temFoto: boolean;
   criadaPorMembroId: number;
   criadaEm: string;
+  /** O que a pessoa idosa disse no áudio, escrito pela família. */
+  transcricao: string | null;
+  /** Bairro onde a memória foi publicada, ou `null` se só a família vê. */
+  bairroPublicado: string | null;
   /** Guardada sem internet e ainda não enviada para a API (US10). */
   aguardandoEnvio: boolean;
 };

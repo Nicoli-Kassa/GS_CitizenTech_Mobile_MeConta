@@ -40,3 +40,6 @@ yarn-error.*
 /ios
 /android
 .env
+
+# Variáveis locais (URL da API)
+.env

@@ -160,12 +160,12 @@ export async function substituirPaginas(paginas: readonly Pagina[]): Promise<voi
     for (const p of paginas) {
       await db.runAsync(
         `INSERT INTO paginas (chave, id, envio_id, idoso_id, idoso_apelido, titulo, pergunta, categoria_id,
-                              duracao_segundos, audio_url, foto_url, criada_por_membro_id, criada_em, sync)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok')
+                              duracao_segundos, audio_url, foto_url, criada_por_membro_id, criada_em, transcricao, sync)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok')
          ON CONFLICT(chave) DO UPDATE SET
            id = excluded.id, envio_id = excluded.envio_id, idoso_apelido = excluded.idoso_apelido,
            titulo = excluded.titulo, duracao_segundos = excluded.duracao_segundos,
-           audio_url = excluded.audio_url, foto_url = excluded.foto_url,
+           audio_url = excluded.audio_url, foto_url = excluded.foto_url, transcricao = excluded.transcricao,
            sync = CASE WHEN paginas.sync = 'apagar' THEN 'apagar' ELSE 'ok' END`,
         p.chaveIdempotencia,
         p.id,
@@ -180,6 +180,7 @@ export async function substituirPaginas(paginas: readonly Pagina[]): Promise<voi
         p.fotoUrl,
         p.criadaPorMembroId,
         p.criadaEm,
+        p.transcricao,
       );
     }
   });
@@ -228,6 +229,8 @@ function paraMemoria(l: Linha): FolhaMemoria {
     temFoto: readString(l, 'foto_url') !== null || readString(l, 'foto_local') !== null,
     criadaPorMembroId: requireNumber(l, 'criada_por_membro_id'),
     criadaEm: requireString(l, 'criada_em'),
+    transcricao: readString(l, 'transcricao'),
+    bairroPublicado: readString(l, 'bairro_publicado'),
     aguardandoEnvio: readString(l, 'sync') === 'aguardando',
   };
 }
@@ -265,4 +268,220 @@ export async function listarFolhas(familiaId: number): Promise<Folha[]> {
     familiaId,
   );
   return [...esperando.map(paraEsperando), ...memorias.map(paraMemoria)];
+}
+
+// ---------- gravação local e fila de sincronização (US10) ----------
+
+/** Envio guardado no celular. Feito sem internet, recebe id negativo até a API responder. */
+export type EnvioLocal = {
+  id: number;
+  idosoId: number;
+  perguntaId: number;
+  pergunta: string;
+  categoriaId: number;
+  mensagem: string;
+  linkWhatsApp: string;
+  status: 'Enviada' | 'Respondida';
+  enviadoEm: string;
+};
+
+function paraEnvioLocal(l: Linha): EnvioLocal {
+  return {
+    id: requireNumber(l, 'id'),
+    idosoId: requireNumber(l, 'idoso_id'),
+    perguntaId: requireNumber(l, 'pergunta_id'),
+    pergunta: requireString(l, 'pergunta'),
+    categoriaId: readNumber(l, 'categoria_id') ?? 0,
+    mensagem: requireString(l, 'mensagem'),
+    linkWhatsApp: requireString(l, 'link_whatsapp'),
+    status: readString(l, 'status') === 'Respondida' ? 'Respondida' : 'Enviada',
+    enviadoEm: requireString(l, 'enviado_em'),
+  };
+}
+
+export async function inserirEnvioPendente(envio: Omit<EnvioLocal, 'id' | 'status'>): Promise<number> {
+  const db = await abrirBanco();
+  const menor = await db.getFirstAsync<{ menor: number | null }>('SELECT MIN(id) AS menor FROM envios');
+  const id = Math.min(-1, (menor?.menor ?? 0) - 1);
+  await db.runAsync(
+    `INSERT INTO envios (id, idoso_id, pergunta_id, pergunta, categoria_id, mensagem, link_whatsapp, status, enviado_em, sync)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'Enviada', ?, 'pendente')`,
+    id,
+    envio.idosoId,
+    envio.perguntaId,
+    envio.pergunta,
+    envio.categoriaId,
+    envio.mensagem,
+    envio.linkWhatsApp,
+    envio.enviadoEm,
+  );
+  return id;
+}
+
+export async function obterEnvio(id: number): Promise<EnvioLocal | null> {
+  const db = await abrirBanco();
+  const linha = await db.getFirstAsync<Linha>('SELECT * FROM envios WHERE id = ?', id);
+  return linha ? paraEnvioLocal(linha) : null;
+}
+
+export async function listarEnviosPendentes(): Promise<EnvioLocal[]> {
+  const db = await abrirBanco();
+  const linhas = await db.getAllAsync<Linha>("SELECT * FROM envios WHERE sync = 'pendente' ORDER BY enviado_em");
+  return linhas.map(paraEnvioLocal);
+}
+
+/** Troca o id provisório (negativo) pelo da API, levando junto as páginas ligadas a ele. */
+export async function confirmarEnvio(idLocal: number, idDaApi: number, link: string, mensagem: string): Promise<void> {
+  const db = await abrirBanco();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM envios WHERE id = ? AND id <> ?', idDaApi, idLocal);
+    await db.runAsync(
+      "UPDATE envios SET id = ?, link_whatsapp = ?, mensagem = ?, sync = 'ok' WHERE id = ?",
+      idDaApi,
+      link,
+      mensagem,
+      idLocal,
+    );
+    await db.runAsync('UPDATE paginas SET envio_id = ? WHERE envio_id = ?', idDaApi, idLocal);
+  });
+}
+
+export async function descartarEnvio(id: number): Promise<void> {
+  const db = await abrirBanco();
+  await db.runAsync('DELETE FROM envios WHERE id = ?', id);
+}
+
+export type PaginaPendente = {
+  chave: string;
+  envioId: number;
+  titulo: string | null;
+  transcricao: string | null;
+  duracaoSegundos: number;
+  audioLocal: string;
+  audioNome: string;
+  fotoLocal: string | null;
+};
+
+/** Resposta guardada no celular, ainda sem id da API (US08 e US10). */
+export async function inserirPaginaLocal(dados: {
+  chave: string;
+  envio: EnvioLocal;
+  idosoApelido: string;
+  titulo: string;
+  transcricao: string | null;
+  duracaoSegundos: number;
+  audioLocal: string;
+  audioNome: string;
+  fotoLocal: string | null;
+  criadaPorMembroId: number;
+}): Promise<void> {
+  const db = await abrirBanco();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `INSERT INTO paginas (chave, id, envio_id, idoso_id, idoso_apelido, titulo, pergunta, categoria_id, duracao_segundos,
+                            audio_url, foto_url, audio_local, foto_local, criada_por_membro_id, criada_em, transcricao, sync)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, 'aguardando')`,
+      dados.chave,
+      dados.envio.id,
+      dados.envio.idosoId,
+      dados.idosoApelido,
+      dados.titulo,
+      dados.envio.pergunta,
+      dados.envio.categoriaId,
+      Math.max(1, Math.round(dados.duracaoSegundos)),
+      // audio_url guarda o nome original do arquivo até a API devolver o caminho dela.
+      dados.audioNome,
+      dados.audioLocal,
+      dados.fotoLocal,
+      dados.criadaPorMembroId,
+      new Date().toISOString(),
+      dados.transcricao,
+    );
+    await db.runAsync("UPDATE envios SET status = 'Respondida' WHERE id = ?", dados.envio.id);
+  });
+}
+
+/** Páginas prontas para subir: o envio já existe na API (id positivo). */
+export async function listarPaginasPendentes(): Promise<PaginaPendente[]> {
+  const db = await abrirBanco();
+  const linhas = await db.getAllAsync<Linha>(
+    "SELECT * FROM paginas WHERE sync = 'aguardando' AND envio_id > 0 ORDER BY criada_em",
+  );
+  return linhas.map((l) => ({
+    chave: requireString(l, 'chave'),
+    envioId: requireNumber(l, 'envio_id'),
+    titulo: readString(l, 'titulo'),
+    transcricao: readString(l, 'transcricao'),
+    duracaoSegundos: readNumber(l, 'duracao_segundos') ?? 1,
+    audioLocal: requireString(l, 'audio_local'),
+    audioNome: readString(l, 'audio_url') ?? 'resposta.m4a',
+    fotoLocal: readString(l, 'foto_local'),
+  }));
+}
+
+export async function confirmarPagina(pagina: Pagina): Promise<void> {
+  const db = await abrirBanco();
+  await db.runAsync(
+    "UPDATE paginas SET id = ?, envio_id = ?, audio_url = ?, foto_url = ?, sync = 'ok' WHERE chave = ?",
+    pagina.id,
+    pagina.envioId,
+    pagina.audioUrl,
+    pagina.fotoUrl,
+    pagina.chaveIdempotencia,
+  );
+}
+
+export async function obterFolha(chave: string): Promise<FolhaMemoria | null> {
+  const db = await abrirBanco();
+  const linha = await db.getFirstAsync<Linha>('SELECT * FROM paginas WHERE chave = ?', chave);
+  return linha ? paraMemoria(linha) : null;
+}
+
+/**
+ * Apagar (US11): página que nunca chegou à API sai na hora; as outras ficam
+ * marcadas e somem da tela até a API confirmar.
+ */
+export async function marcarParaApagar(chave: string): Promise<void> {
+  const db = await abrirBanco();
+  const linha = await db.getFirstAsync<Linha>('SELECT id, envio_id FROM paginas WHERE chave = ?', chave);
+  if (!linha) {
+    return;
+  }
+  await db.withTransactionAsync(async () => {
+    if (readNumber(linha, 'id') === null) {
+      await db.runAsync('DELETE FROM paginas WHERE chave = ?', chave);
+    } else {
+      await db.runAsync("UPDATE paginas SET sync = 'apagar' WHERE chave = ?", chave);
+    }
+    // Como na API: a pergunta volta a esperar resposta.
+    await db.runAsync("UPDATE envios SET status = 'Enviada' WHERE id = ?", readNumber(linha, 'envio_id') ?? 0);
+  });
+}
+
+export async function listarPaginasParaApagar(): Promise<{ chave: string; id: number }[]> {
+  const db = await abrirBanco();
+  const linhas = await db.getAllAsync<Linha>("SELECT chave, id FROM paginas WHERE sync = 'apagar' AND id IS NOT NULL");
+  return linhas.map((l) => ({ chave: requireString(l, 'chave'), id: requireNumber(l, 'id') }));
+}
+
+export async function removerPagina(chave: string): Promise<void> {
+  const db = await abrirBanco();
+  await db.runAsync('DELETE FROM paginas WHERE chave = ?', chave);
+}
+
+export async function gravarTranscricaoLocal(chave: string, texto: string | null): Promise<void> {
+  const db = await abrirBanco();
+  await db.runAsync('UPDATE paginas SET transcricao = ? WHERE chave = ?', texto, chave);
+}
+
+export async function gravarBairroPublicado(chave: string, bairro: string | null): Promise<void> {
+  const db = await abrirBanco();
+  await db.runAsync('UPDATE paginas SET bairro_publicado = ? WHERE chave = ?', bairro, chave);
+}
+
+/** Ids das perguntas já enviadas para o idoso (para a pergunta da semana não repetir). */
+export async function listarPerguntasJaEnviadas(idosoId: number): Promise<Set<number>> {
+  const db = await abrirBanco();
+  const linhas = await db.getAllAsync<Linha>('SELECT DISTINCT pergunta_id FROM envios WHERE idoso_id = ?', idosoId);
+  return new Set(linhas.map((l) => requireNumber(l, 'pergunta_id')));
 }

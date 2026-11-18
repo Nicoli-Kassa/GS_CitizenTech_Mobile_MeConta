@@ -21,6 +21,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Corpo cru da resposta de erro (ProblemDetails), para quem precisar de mais campos. */
+    readonly corpo: unknown = null,
   ) {
     super(message);
     this.name = 'ApiError';
