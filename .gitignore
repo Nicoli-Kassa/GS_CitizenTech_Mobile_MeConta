@@ -43,3 +43,6 @@ yarn-error.*
 
 # Variáveis locais (URL da API)
 .env
+
+# Configurações locais de ferramentas
+.claude/
