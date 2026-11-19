@@ -9,7 +9,7 @@ O app é um caderno de família. Cada resposta em áudio dos avós vira uma pág
 | | |
 |---|---|
 | 🎬 **Vídeo do app (até 3 min)** | [Assistir no YouTube](https://youtu.be/INSERIR-LINK-DO-VIDEO-MOBILE) |
-| 🎤 **Pitch (até 4 min)** | [Assistir no YouTube](https://youtu.be/INSERIR-LINK-DO-PITCH) |
+| 🎤 **Pitch (até 4 min)** | [Assistir no YouTube](https://youtu.be/F_s7jXz_GzU?si=BWAwcYsnbfSadE9d) |
 | 🔌 **API (C# / .NET)** | [GS_CitizenTech_API_MeConta](https://github.com/Nicoli-Kassa/GS_CitizenTech_API_MeConta) | 
 
 ---
