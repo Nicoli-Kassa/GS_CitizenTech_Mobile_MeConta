@@ -144,6 +144,15 @@ export default function PerguntarScreen(): React.JSX.Element {
     }
   };
 
+  /**
+   * Chamada no fim da animação. Precisa ser criada aqui, no JavaScript do app:
+   * uma função criada dentro da animação (que roda na linha de interface)
+   * derruba o app no celular ao ser chamada de volta.
+   */
+  const abrirDepoisDoVoo = (): void => {
+    void abrirWhatsApp();
+  };
+
   const enviar = (): void => {
     if (reduzido) {
       void abrirWhatsApp();
@@ -153,7 +162,7 @@ export default function PerguntarScreen(): React.JSX.Element {
     voo.set(
       withTiming(1, { duration: 650 }, (terminou) => {
         if (terminou) {
-          scheduleOnRN(() => void abrirWhatsApp());
+          scheduleOnRN(abrirDepoisDoVoo);
         }
       }),
     );
