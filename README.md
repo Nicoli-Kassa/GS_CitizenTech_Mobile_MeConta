@@ -10,8 +10,7 @@ O app é um caderno de família. Cada resposta em áudio dos avós vira uma pág
 |---|---|
 | 🎬 **Vídeo do app (até 3 min)** | [Assistir no YouTube](https://youtu.be/INSERIR-LINK-DO-VIDEO-MOBILE) |
 | 🎤 **Pitch (até 4 min)** | [Assistir no YouTube](https://youtu.be/INSERIR-LINK-DO-PITCH) |
-| 🔌 **API (C# / .NET)** | [GS_CitizenTech_API_MeConta](https://github.com/Nicoli-Kassa/GS_CitizenTech_API_MeConta) |
-| 🤖 **Uso de IA** | [prompts.md](prompts.md) |
+| 🔌 **API (C# / .NET)** | [GS_CitizenTech_API_MeConta](https://github.com/Nicoli-Kassa/GS_CitizenTech_API_MeConta) | 
 
 ---
 
@@ -275,7 +274,4 @@ me-conta-app/
 - **Mapa:** o caderno do bairro é uma lista por bairro. O mapa com marcadores fica para depois do piloto em Pirituba.
 
 ---
-
-## Uso de IA
-
-O uso de IA generativa no desenvolvimento está registrado em [prompts.md](prompts.md).
+ 
