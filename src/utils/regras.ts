@@ -112,7 +112,7 @@ export function validarPerguntaPropria(texto: string, categoriaId: number | null
   return limpo;
 }
 
-/** "Vó Lourdes, me conta: qual é o segredo do seu bolo?" */
+/** "Vó Laura, me conta: qual é o segredo do seu bolo?" */
 export function montarMensagem(apelido: string, pergunta: string): string {
   return `${apelido}, me conta: ${pergunta}`;
 }

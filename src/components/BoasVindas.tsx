@@ -38,7 +38,7 @@ export function BoasVindas(): React.JSX.Element {
   if (status === 'sem-perfil') {
     return (
       <CapaDeEntrada subtitulo="Falta só uma coisa antes de abrir o caderno.">
-        <Campo label="Como você quer ser chamada" value={nomePessoa} onChangeText={setNomePessoa} placeholder="Ex.: Bia" />
+        <Campo label="Como você quer ser chamada" value={nomePessoa} onChangeText={setNomePessoa} placeholder="Ex.: Nicoli" />
         {erro ? <Recado tipo="erro" texto={erro} /> : null}
         <Botao
           label="Continuar"

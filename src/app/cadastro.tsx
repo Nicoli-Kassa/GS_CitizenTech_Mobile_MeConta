@@ -54,7 +54,7 @@ export default function CadastroScreen(): React.JSX.Element {
           setNome(t);
         }}
         autoComplete="name"
-        placeholder="Ex.: Bia"
+        placeholder="Ex.: Nicoli"
       />
       <Campo
         label="E-mail"

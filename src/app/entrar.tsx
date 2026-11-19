@@ -66,7 +66,7 @@ export default function EntrarScreen(): React.JSX.Element {
       <Botao label="Entrar" icone="proxima" isLoading={enviando} disabled={!email || !senha} onPress={() => void enviar()} />
       <Botao label="Criar uma conta" variante="contorno" onPress={() => router.push('/cadastro')} />
       <Botao
-        label="Entrar como Bia (demonstração)"
+        label={CONTA_DEMONSTRACAO.rotulo}
         variante="papel"
         accessibilityHint="Usa a conta de demonstração, com a Família Souza já montada"
         onPress={() => {

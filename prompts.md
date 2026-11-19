@@ -16,6 +16,6 @@ Registro do uso de IA (Claude, da Anthropic) no desenvolvimento do app mobile. T
 
 ## Cuidados
 
-- **Nenhum dado pessoal real:** a Família Souza, os telefones e as histórias são fictícios. O CPF da página de demonstração é um número de teste.
+- **Dados de demonstração:** a família usa só os primeiros nomes da neta (Nicoli) e da avó (Laura). Sobrenome, telefones, e-mails e histórias são fictícios. O CPF da página de demonstração é um número de teste.
 - **Sem imagens de terceiros:** as texturas, os ícones, as ilustrações e a melodia de demonstração foram gerados para o projeto.
 - **A IA do app (Gemini) fica na API:** o app nunca fala direto com o Gemini. Ele só mostra a explicação que a API devolve, e a API só manda para a IA o texto já mascarado.

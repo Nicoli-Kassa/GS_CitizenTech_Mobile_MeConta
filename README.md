@@ -50,7 +50,7 @@ A jornada principal, do começo ao fim:
 1. **Entrar ou criar conta** com e-mail e senha. Depois, **escrever o nome da família na capa** do caderno, ou entrar no caderno de um parente com o **código de convite**.
 2. **Abrir o caderno.** A capa abre com uma animação, e as folhas viram com o dedo ou com as setas. As abas coloridas separam as memórias por assunto.
 3. **Perguntar.** A pergunta da semana aparece num bilhete. Dá para sortear outra, escolher por assunto ou escrever uma pergunta da família.
-4. **Enviar pelo WhatsApp.** O bilhete vira envelope e o WhatsApp abre com "Vó Lourdes, me conta: …" pronto para enviar.
+4. **Enviar pelo WhatsApp.** O bilhete vira envelope e o WhatsApp abre com "Vó Laura, me conta: …" pronto para enviar.
 5. **A página espera a resposta.** No caderno, aparece uma página em branco com a pergunta escrita no alto.
 6. **Guardar a resposta.** A família escolhe o áudio que a avó mandou, uma foto, o título e, se quiser, escreve o que ela contou. A página é colada no caderno.
 7. **Ouvir.** Cada página tem o botão "Ouvir", com a voz de quem contou.
@@ -133,9 +133,9 @@ Escaneie o QR code com o Expo Go, com o celular na mesma rede Wi-Fi do PC. Se a 
 
 ### Modo de demonstração (sem API)
 
-Sem configurar nada, o app usa os **dados de demonstração**. Na tela de entrada, toque em **"Entrar como Bia (demonstração)"**.
+Sem configurar nada, o app usa os **dados de demonstração**. Na tela de entrada, toque em **"Entrar como Nicoli (demonstração)"** (`nicoli@example.com` / `MeConta@2026`).
 
-A Família Souza, a Vó Lourdes e o Vô Antônio são **todos fictícios**, assim como os outros dados de demonstração. Esse modo segue as mesmas regras e mensagens da API e guarda tudo no SQLite do celular. O filtro de dados pessoais desse modo é uma versão reduzida do motor da API, com 6 tipos de dado em vez de 17 e sem a IA.
+A família de demonstração é a Família Souza: a Nicoli (neta), a Vó Laura e o Vô Antônio. Telefones, e-mails e histórias são **fictícios**. Esse modo segue as mesmas regras e mensagens da API e guarda tudo no SQLite do celular. O filtro de dados pessoais desse modo é uma versão reduzida do motor da API, com 6 tipos de dado em vez de 17 e sem a IA.
 
 ### Com a API
 
@@ -149,7 +149,7 @@ A Família Souza, a Vó Lourdes e o Vô Antônio são **todos fictícios**, assi
    EXPO_PUBLIC_API_URL=http://192.168.0.10:5080
    ```
 4. Libere a porta 5080 no Firewall do Windows, se o celular não conectar.
-5. Rode `npm run start:clean` de novo e entre com `bia@example.com` / `MeConta@2026`.
+5. Rode `npm run start:clean` de novo e toque em **"Entrar com a conta de demonstração"**: o app usa a conta que a API cria no primeiro uso (`bia@example.com` / `MeConta@2026`). Os nomes que aparecem nas telas vêm da API.
 
 Com a API ligada, a explicação de risco vem do Gemini (se a chave estiver configurada) e os avisos "quero contar" chegam do porta-retrato (Wokwi + Node-RED).
 
@@ -211,7 +211,7 @@ O app segue a **WCAG 2.1 nível AA** (US13 e RNF05):
 | Matéria | Como aparece no app |
 |---|---|
 | **C# e SOA** | Toda a comunicação usa as rotas `/api/v1` da API, com os mesmos nomes dos DTOs (`src/types/api.ts`). |
-| **IoT** | O porta-retrato chama `POST /porta-retrato/quero-contar`, e o app consulta `GET /familias/{id}/avisos` a cada 15 s e mostra o bilhete "Vó Lourdes quer contar!". Em "Nossa família", aparece se o porta-retrato está ligado. |
+| **IoT** | O porta-retrato chama `POST /porta-retrato/quero-contar`, e o app consulta `GET /familias/{id}/avisos` a cada 15 s e mostra o bilhete "Vó Laura quer contar!". Em "Nossa família", aparece se o porta-retrato está ligado. |
 | **Cybersecurity** | Antes de publicar no bairro, o app chama `POST /paginas/{id}/analise-privacidade` e `GET /paginas/{id}/explicacao-de-risco`. Mostra o índice Risco Cidadão, os trechos mascarados, o alerta da IA e a versão sem os dados (`PUT /paginas/{id}/transcricao`). |
 
 ---
@@ -248,7 +248,7 @@ me-conta-app/
 | | | |
 |---|---|---|
 | ![Entrar](docs/prints/01-entrar.png) | ![Capa do caderno](docs/prints/02-capa.png) | ![Aviso do porta-retrato](docs/prints/03-aviso-quero-contar.png) |
-| Entrar | Capa do caderno | "Vó Lourdes quer contar!" (porta-retrato) |
+| Entrar | Capa do caderno | "Vó Laura quer contar!" (porta-retrato) |
 | ![Página esperando](docs/prints/04-pagina-esperando.png) | ![Memória](docs/prints/05-memoria.png) | ![Perguntar](docs/prints/06-perguntar.png) |
 | Página esperando a resposta | Memória com áudio | Pergunta da semana |
 | ![Pergunta enviada](docs/prints/07-pergunta-enviada.png) | ![Guardar a resposta](docs/prints/08-guardar-resposta.png) | ![Página nova](docs/prints/09-pagina-nova.png) |
@@ -262,7 +262,7 @@ me-conta-app/
 | ![Ensine sua avó](docs/prints/19-ensine-sua-avo.png) | ![Ainda não](docs/prints/20-ainda-nao.png) | |
 | Ensine sua avó | "Ainda não": repetir o passo | |
 
-> Prints do modo de demonstração, na pré-visualização web em tamanho de celular. Todos os dados são fictícios.
+> Prints do modo de demonstração, na pré-visualização web em tamanho de celular. Telefones e histórias são fictícios.
 
 ---
 

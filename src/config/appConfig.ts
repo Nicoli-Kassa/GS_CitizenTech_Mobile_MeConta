@@ -27,8 +27,12 @@ export const API_URL: string | null =
 
 export const USANDO_MOCK = API_URL === null;
 
-/** Conta de demonstração, igual à que a API cria no primeiro uso. */
+/**
+ * Conta de demonstração. No modo sem API, é a Nicoli da Família Souza.
+ * Com a API, é a conta que a API cria no primeiro uso (`bia@example.com`).
+ */
 export const CONTA_DEMONSTRACAO = {
-  email: 'bia@example.com',
+  email: USANDO_MOCK ? 'nicoli@example.com' : 'bia@example.com',
   senha: 'MeConta@2026',
+  rotulo: USANDO_MOCK ? 'Entrar como Nicoli (demonstração)' : 'Entrar com a conta de demonstração',
 } as const;

@@ -9,7 +9,7 @@ import { Papel } from './Papel';
 
 type FolhaProps = {
   titulo: string;
-  /** Linha pequena acima do título (ex.: "para Vó Lourdes"). */
+  /** Linha pequena acima do título (ex.: "para Vó Laura"). */
   sobretitulo?: string;
   children: ReactNode;
   textura?: 'papel' | 'kraft';

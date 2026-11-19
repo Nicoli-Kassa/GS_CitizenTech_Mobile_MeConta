@@ -51,8 +51,8 @@ import { analisarTexto, explicarAnalise } from './motorDeDemonstracao';
  * API em C#, então o app funciona igual nos dois modos. O estado fica salvo
  * no SQLite (preferência `mock-servidor`) e sobrevive ao fechar o app.
  *
- * Todos os dados são fictícios: a Família Souza, a Bia, a Cláudia, a
- * Vó Lourdes e o Vô Antônio, os mesmos da demonstração da API.
+ * Família de demonstração: a Família Souza, com a Nicoli, a Cláudia, a
+ * Vó Laura e o Vô Antônio. Telefones, e-mails e histórias são fictícios.
  */
 
 type Participacao = { membroId: number; papel: PapelNaFamilia; entrouEm: string };
@@ -65,7 +65,7 @@ type MemoriaMock = MemoriaDoBairro & { paginaId: number | null; noMapa: boolean 
 type AvisoMock = Aviso & { familiaId: number };
 
 type EstadoMock = {
-  versao: 2;
+  versao: 3;
   proximoId: number;
   usuarios: UsuarioMock[];
   membros: Membro[];
@@ -114,11 +114,11 @@ function catalogo(id: number): Pergunta {
 }
 
 function estadoInicial(): EstadoMock {
-  const lourdes: Idoso = {
+  const laura: Idoso = {
     id: 1,
     familiaId: 1,
-    nome: 'Lourdes Souza',
-    apelido: 'Vó Lourdes',
+    nome: 'Laura Souza',
+    apelido: 'Vó Laura',
     // Número fictício, igual ao da demonstração da API.
     whatsApp: '5511900000001',
     respondeSozinho: true,
@@ -176,15 +176,15 @@ function estadoInicial(): EstadoMock {
   memorias.forEach((memoria, indice) => {
     const pergunta = catalogo(memoria.perguntaId);
     const envioId = indice + 1;
-    const mensagem = montarMensagem(lourdes.apelido, pergunta.texto);
+    const mensagem = montarMensagem(laura.apelido, pergunta.texto);
     envios.push({
       id: envioId,
-      idosoId: lourdes.id,
+      idosoId: laura.id,
       perguntaId: pergunta.id,
       pergunta: pergunta.texto,
       categoriaId: pergunta.categoriaId,
       mensagem,
-      linkWhatsApp: montarLinkWhatsApp(lourdes.whatsApp ?? '', mensagem),
+      linkWhatsApp: montarLinkWhatsApp(laura.whatsApp ?? '', mensagem),
       status: 'Respondida',
       enviadoEm: diasAtras(memoria.dias + 1, 12),
       respondidoEm: diasAtras(memoria.dias),
@@ -193,8 +193,8 @@ function estadoInicial(): EstadoMock {
     paginas.push({
       id: indice + 1,
       envioId,
-      idosoId: lourdes.id,
-      idosoApelido: lourdes.apelido,
+      idosoId: laura.id,
+      idosoApelido: laura.apelido,
       titulo: memoria.titulo,
       pergunta: pergunta.texto,
       categoriaId: pergunta.categoriaId,
@@ -212,15 +212,15 @@ function estadoInicial(): EstadoMock {
 
   // Uma pergunta enviada ontem, ainda esperando a resposta.
   const aguardando = catalogo(22);
-  const mensagem = montarMensagem(lourdes.apelido, aguardando.texto);
+  const mensagem = montarMensagem(laura.apelido, aguardando.texto);
   envios.push({
     id: proximoEnvio,
-    idosoId: lourdes.id,
+    idosoId: laura.id,
     perguntaId: aguardando.id,
     pergunta: aguardando.texto,
     categoriaId: aguardando.categoriaId,
     mensagem,
-    linkWhatsApp: montarLinkWhatsApp(lourdes.whatsApp ?? '', mensagem),
+    linkWhatsApp: montarLinkWhatsApp(laura.whatsApp ?? '', mensagem),
     status: 'Enviada',
     enviadoEm: diasAtras(1, 13),
     respondidoEm: null,
@@ -228,14 +228,14 @@ function estadoInicial(): EstadoMock {
   });
 
   return {
-    versao: 2,
+    versao: 3,
     proximoId: 100,
     usuarios: [
-      { email: 'bia@example.com', senha: SENHA_DEMONSTRACAO, membroId: 1 },
+      { email: 'nicoli@example.com', senha: SENHA_DEMONSTRACAO, membroId: 1 },
       { email: 'claudia@example.com', senha: SENHA_DEMONSTRACAO, membroId: 2 },
     ],
     membros: [
-      { id: 1, nome: 'Bia', criadoEm: diasAtras(40) },
+      { id: 1, nome: 'Nicoli', criadoEm: diasAtras(40) },
       { id: 2, nome: 'Cláudia', criadoEm: diasAtras(40) },
     ],
     familias: [
@@ -250,7 +250,7 @@ function estadoInicial(): EstadoMock {
       },
     ],
     convites: [{ codigo: 'CASA26', familiaId: 1, expiraEm: new Date(Date.now() + 48 * 3600 * 1000).toISOString() }],
-    idosos: [lourdes, antonio],
+    idosos: [laura, antonio],
     perguntasDaFamilia: [],
     envios,
     paginas,
@@ -281,13 +281,13 @@ function estadoInicial(): EstadoMock {
         publicadaEm: diasAtras(11),
       },
     ],
-    // A Vó Lourdes apertou "quero contar" no porta-retrato para a pergunta que está esperando.
+    // A Vó Laura apertou "quero contar" no porta-retrato para a pergunta que está esperando.
     avisos: [
       {
         id: 1,
         familiaId: 1,
-        idosoId: lourdes.id,
-        apelido: lourdes.apelido,
+        idosoId: laura.id,
+        apelido: laura.apelido,
         envioId: proximoEnvio,
         pergunta: aguardando.texto,
         criadoEm: diasAtras(0, Math.max(0, new Date().getUTCHours() - 1)),
@@ -295,7 +295,7 @@ function estadoInicial(): EstadoMock {
         vistoEm: null,
       },
     ],
-    portaRetratos: [{ id: 1, idosoId: lourdes.id, codigo: 'PR-LOURDES', conectado: true, ultimoContatoEm: new Date().toISOString() }],
+    portaRetratos: [{ id: 1, idosoId: laura.id, codigo: 'PR-LAURA', conectado: true, ultimoContatoEm: new Date().toISOString() }],
   };
 }
 
@@ -323,7 +323,7 @@ export class ApiMock implements ApiMeConta {
     if (salvo) {
       try {
         const lido = JSON.parse(salvo) as EstadoMock;
-        estado = lido.versao === 2 ? lido : null;
+        estado = lido.versao === 3 ? lido : null;
       } catch {
         estado = null;
       }
