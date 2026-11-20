@@ -8,7 +8,7 @@ O app é um caderno de família. Cada resposta em áudio dos avós vira uma pág
 
 | | |
 |---|---|
-| 🎬 **Vídeo do app (até 3 min)** | [Assistir no YouTube](https://youtu.be/INSERIR-LINK-DO-VIDEO-MOBILE) |
+| 🎬 **Vídeo do app (até 3 min)** | [Assistir no YouTube](https://www.youtube.com/watch?v=6ZmtOUxaGH0) |
 | 🎤 **Pitch (até 4 min)** | [Assistir no YouTube](https://youtu.be/F_s7jXz_GzU?si=BWAwcYsnbfSadE9d) |
 | 🔌 **API (C# / .NET)** | [GS_CitizenTech_API_MeConta](https://github.com/Nicoli-Kassa/GS_CitizenTech_API_MeConta) | 
 
@@ -38,7 +38,7 @@ O app é por onde a família usa o Me Conta. A neta escolhe a pergunta e manda p
 
 | Nome | RM |
 |---|---|
-| Nicoli Amy Kassa | RM-INSERIR |
+| Nicoli Amy Kassa | RM559104 |
 
 ---
 
